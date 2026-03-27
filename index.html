@@ -3,209 +3,80 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AR Menu SaaS</title>
-
+<title>AR Menu</title>
 <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
-
 <style>
-body { margin:0; font-family:sans-serif; background:#0a0a0a; color:#fff; }
-
-model-viewer {
-  width:100vw;
-  height:60vh;
-  background:#000;
-}
-
-#panel {
-  padding:15px;
-  background:#111;
-}
-
-input, select {
-  width:100%;
-  padding:10px;
-  margin:6px 0;
-  border-radius:8px;
-  border:none;
-}
-
-button {
-  width:100%;
-  padding:12px;
-  margin-top:8px;
-  border:none;
-  border-radius:10px;
-  font-weight:bold;
-  cursor:pointer;
-}
-
-#status {
-  margin-top:10px;
-  font-size:14px;
-  color:#aaa;
-}
-
-#qr {
-  margin-top:15px;
-  display:flex;
-  justify-content:center;
-}
+  body { margin:0; background:#0a0a0a; font-family:sans-serif; color:#fff; }
+  model-viewer { width:100vw; height:100vh; background:#000; }
+  #label { position:fixed; top:20px; left:50%; transform:translateX(-50%); background:rgba(255,255,255,0.1); padding:10px 20px; border-radius:20px; backdrop-filter:blur(10px); }
+  #btn { position:fixed; bottom:40px; left:50%; transform:translateX(-50%); padding:15px 30px; border:none; border-radius:30px; background:#fff; color:#000; font-weight:bold; cursor:pointer;}
+  #status { position:fixed; bottom:10px; left:50%; transform:translateX(-50%); font-size:13px; opacity:0.7; }
 </style>
 </head>
 <body>
 
-<model-viewer id="model"
-  ar
-  ar-modes="scene-viewer quick-look webxr"
-  camera-controls
-  auto-rotate
-  ar-scale="fixed">
-</model-viewer>
+<div id="label">Загрузка меню...</div>
 
-<div id="panel">
+<model-viewer id="model" ar ar-modes="scene-viewer quick-look webxr" camera-controls auto-rotate ar-scale="fixed"></model-viewer>
 
-<h3>🍔 AR Menu Admin</h3>
-
-<input id="name" placeholder="Название блюда">
-<input id="file" placeholder="Имя файла (burger)">
-<input id="scale" type="number" step="0.01" placeholder="Размер (0.5)">
-
-<button onclick="addDish()">Добавить блюдо</button>
-
-<hr>
-
-<select id="dishSelect"></select>
-
-<button onclick="loadDish()">Показать блюдо</button>
-<button onclick="generateQR()">Сгенерить QR</button>
-
-<div id="status"></div>
-<div id="qr"></div>
-
-</div>
+<button id="btn" style="display:none;">Открыть AR</button>
+<div id="status">Подключение...</div>
 
 <script>
-
-// ===== НАСТРОЙКИ =====
-
-const BASE_URL = "https://askaromir.github.io/AR_Menu_KZ/models/";
-const GLOBAL_SCALE = 0.1;
-const MAX_SCALE = 0.3;
-const MIN_SCALE = 0.03;
-
-// ===== STATE =====
-
-let dishes = JSON.parse(localStorage.getItem("dishes") || "{}");
+const CONFIG = {
+  MODELS_URL: "https://askaromir.github.io/AR_Menu_KZ/models/",
+  MENU_URL: "menu.json", // Путь к нашей новой базе данных
+  GLOBAL_SCALE: 0.1,
+  MAX_SCALE: 0.3,
+  MIN_SCALE: 0.03
+};
 
 const model = document.getElementById("model");
+const label = document.getElementById("label");
+const btn = document.getElementById("btn");
 const status = document.getElementById("status");
 
-// ===== UTILS =====
-
-function clamp(val, min, max) {
-  return Math.max(min, Math.min(max, val));
-}
-
-function setStatus(text) {
-  status.textContent = text;
-}
-
-// ===== ADD DISH =====
-
-function addDish() {
-  const name = document.getElementById("name").value.trim();
-  const file = document.getElementById("file").value.trim();
-  let scale = parseFloat(document.getElementById("scale").value);
-
-  if (!name || !file || isNaN(scale)) {
-    setStatus("❌ Заполни все поля правильно");
-    return;
-  }
-
-  scale = clamp(scale, 0.1, 2);
-
-  dishes[file] = { name, file, baseScale: scale };
-
-  localStorage.setItem("dishes", JSON.stringify(dishes));
-
-  updateSelect();
-  setStatus("✅ Добавлено");
-}
-
-// ===== SELECT =====
-
-function updateSelect() {
-  const select = document.getElementById("dishSelect");
-  select.innerHTML = "";
-
-  Object.keys(dishes).forEach(key => {
-    const option = document.createElement("option");
-    option.value = key;
-    option.textContent = dishes[key].name;
-    select.appendChild(option);
-  });
-}
-
-updateSelect();
-
-// ===== LOAD =====
-
-function getScale(base) {
-  const s = clamp(base * GLOBAL_SCALE, MIN_SCALE, MAX_SCALE);
+function getScale(base){
+  const s = Math.max(CONFIG.MIN_SCALE, Math.min(CONFIG.MAX_SCALE, base * CONFIG.GLOBAL_SCALE));
   return `${s} ${s} ${s}`;
 }
 
-function loadDish() {
-  const id = document.getElementById("dishSelect").value;
-  const dish = dishes[id];
+async function init() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const dishId = params.get("dish") || "burger"; // бургер по умолчанию
 
-  if (!dish) return;
+    // Запрашиваем свежие данные
+    const response = await fetch(CONFIG.MENU_URL);
+    if (!response.ok) throw new Error("Ошибка сети");
+    const dishes = await response.json();
 
-  setStatus("⏳ Загрузка модели...");
+    const dish = dishes[dishId];
+    if (!dish) throw new Error("Блюдо не найдено");
 
-  model.setAttribute("src", BASE_URL + dish.file + ".glb");
-  model.setAttribute("ios-src", BASE_URL + dish.file + ".usdz");
-  model.setAttribute("scale", getScale(dish.baseScale));
+    label.textContent = dish.name;
+    model.setAttribute("src", CONFIG.MODELS_URL + dish.file + ".glb");
+    model.setAttribute("ios-src", CONFIG.MODELS_URL + dish.file + ".usdz");
+    model.setAttribute("scale", getScale(dish.baseScale));
+    
+    btn.style.display = "block";
+    status.textContent = "Загрузка 3D модели...";
+
+  } catch (err) {
+    label.textContent = "Ошибка";
+    status.textContent = "❌ " + err.message;
+  }
 }
 
-// ===== MODEL EVENTS =====
+model.addEventListener("load", () => status.textContent = "✅ Готово");
+model.addEventListener("error", () => status.textContent = "❌ Ошибка загрузки модели");
 
-model.addEventListener("load", () => {
-  setStatus("✅ Модель загружена");
+btn.addEventListener("click", async () => {
+  if (model.canActivateAR) await model.activateAR();
+  else status.textContent = "AR не поддерживается на этом устройстве";
 });
 
-model.addEventListener("error", () => {
-  setStatus("❌ Ошибка загрузки модели");
-});
-
-// ===== QR =====
-
-function generateQR() {
-  const id = document.getElementById("dishSelect").value;
-  if (!id) return;
-
-  const url = window.location.origin + window.location.pathname + "?dish=" + id;
-
-  const qrDiv = document.getElementById("qr");
-  qrDiv.innerHTML = "";
-
-  QRCode.toCanvas(url, { width: 200 }, (err, canvas) => {
-    qrDiv.appendChild(canvas);
-  });
-}
-
-// ===== AUTO LOAD =====
-
-const params = new URLSearchParams(window.location.search);
-const dishId = params.get("dish");
-
-if (dishId && dishes[dishId]) {
-  document.getElementById("dishSelect").value = dishId;
-  loadDish();
-}
-
+init();
 </script>
-
 </body>
 </html>

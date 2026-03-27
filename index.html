@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AR Меню</title>
+  <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; width: 100vw; height: 100vh; overflow: hidden; }
+
+    model-viewer {
+      width: 100vw;
+      height: 100vh;
+      background-color: #111;
+      --poster-color: #111;
+    }
+
+    /* Название блюда поверх модели */
+    #dish-label {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.55);
+      color: #fff;
+      font-family: sans-serif;
+      font-size: 20px;
+      font-weight: 600;
+      padding: 8px 20px;
+      border-radius: 30px;
+      backdrop-filter: blur(8px);
+      pointer-events: none;
+      z-index: 10;
+      white-space: nowrap;
+    }
+
+    /* Кнопка AR — стилизуем стандартную кнопку model-viewer */
+    model-viewer::part(ar-button) {
+      bottom: 32px;
+      right: 50%;
+      transform: translateX(50%);
+      background: #fff;
+      color: #000;
+      border-radius: 30px;
+      padding: 12px 28px;
+      font-size: 16px;
+      font-weight: 600;
+      border: none;
+    }
+
+    /* Сообщение если модель не найдена */
+    #error-msg {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #ff6b6b;
+      font-family: sans-serif;
+      font-size: 16px;
+      text-align: center;
+      padding: 20px;
+      background: rgba(0,0,0,0.7);
+      border-radius: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="dish-label">Загрузка...</div>
+
+  <model-viewer
+    id="model"
+    ar
+    ar-modes="webxr scene-viewer quick-look"
+    camera-controls
+    auto-rotate
+    auto-rotate-delay="500"
+    rotation-per-second="30deg"
+    shadow-intensity="1"
+    ar-button-label="👆 Посмотреть в реальности">
+  </model-viewer>
+
+  <div id="error-msg">❌ Модель не найдена.<br>Проверь имя файла и путь.</div>
+
+  <script>
+    // ============================================================
+    //  НАСТРОЙКИ — меняй только здесь
+    // ============================================================
+
+    // Твой GitHub Pages базовый URL (замени username и repo-name)
+    const BASE_URL = "https://askaromir.github.io/AR_Menu_KZ/models/";
+
+    // Список блюд: { id, name, file }
+    // id  — то, что идёт в URL после ?dish=
+    // name — отображается на экране
+    // file — имя файла без расширения (лежит в /models/)
+    const DISHES = {
+      burger:  { name: "🍔 Бургер",     file: "burger"  },
+      pizza:   { name: "🍕 Пицца",      file: "pizza"   },
+      sushi:   { name: "🍣 Суши",       file: "sushi"   },
+      coffee:  { name: "☕ Кофе",       file: "coffee"  },
+      cake:    { name: "🎂 Торт",       file: "cake"    },
+      // Добавляй новые блюда сюда ↑
+    };
+
+    // ============================================================
+    //  Логика — не трогай
+    // ============================================================
+
+    const params  = new URLSearchParams(window.location.search);
+    const dishId  = params.get("dish") || "burger"; // по умолчанию burger
+    const dish    = DISHES[dishId];
+    const model   = document.getElementById("model");
+    const label   = document.getElementById("dish-label");
+    const errMsg  = document.getElementById("error-msg");
+
+    if (!dish) {
+      label.textContent = "Блюдо не найдено";
+      errMsg.style.display = "block";
+    } else {
+      label.textContent = dish.name;
+
+      const glbURL  = `${BASE_URL}${dish.file}.glb`;
+      const usdzURL = `${BASE_URL}${dish.file}.usdz`;
+
+      model.setAttribute("src",      glbURL);
+      model.setAttribute("ios-src",  usdzURL);
+
+      model.addEventListener("error", () => {
+        errMsg.style.display = "block";
+        label.textContent = "Ошибка загрузки";
+      });
+    }
+  </script>
+
+</body>
+</html>

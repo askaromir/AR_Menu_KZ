@@ -3,159 +3,130 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>AR Menu | Admin Panel</title>
+    <title>AR Menu | Admin Center</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root { --bg: #0f172a; --card: #1e293b; --accent: #38bdf8; --text: #f8fafc; }
         body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; }
-        .container { max-width: 900px; margin: 0 auto; }
-        h2 { color: var(--accent); margin-bottom: 30px; }
-        
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
-
-        .card { background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #334155; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
-        
-        input, select { background: #0f172a; border: 1px solid #334155; color: white; padding: 12px; border-radius: 8px; width: 100%; box-sizing: border-box; margin-bottom: 10px; outline: none; }
-        input:focus { border-color: var(--accent); }
-        
-        button { background: var(--accent); color: #0f172a; border: none; padding: 12px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; width: 100%; }
-        button:hover { opacity: 0.9; transform: translateY(-1px); }
-        button.secondary { background: #334155; color: white; margin-top: 5px; }
-
-        .dish-item { display: flex; justify-content: space-between; align-items: center; background: #334155; padding: 10px 15px; border-radius: 8px; margin-bottom: 8px; }
-        .dish-info { flex-grow: 1; }
-        .dish-actions { display: flex; gap: 5px; }
-        .btn-small { width: auto; padding: 6px 10px; font-size: 12px; }
-
-        #qr-result { text-align: center; margin-top: 20px; background: white; padding: 20px; border-radius: 12px; color: black; display: none; }
-        #qr-result canvas { max-width: 100%; height: auto !important; }
-        
-        textarea#jsonOutput { width: 100%; height: 80px; background: #000; color: #10b981; font-family: monospace; font-size: 12px; margin-top: 10px; border-radius: 8px; padding: 10px; border: none; }
-        .step-num { display: inline-block; background: var(--accent); color: #000; width: 24px; height: 24px; border-radius: 50%; text-align: center; line-height: 24px; font-weight: bold; margin-right: 10px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        .card { background: var(--card); padding: 25px; border-radius: 16px; border: 1px solid #334155; margin-bottom: 20px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+        h2 { color: var(--accent); margin-bottom: 20px; text-align: center; }
+        input, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 12px; border-radius: 10px; width: 100%; box-sizing: border-box; margin-bottom: 15px; }
+        button { background: var(--accent); color: #0f172a; border: none; padding: 15px; border-radius: 10px; font-weight: bold; cursor: pointer; width: 100%; transition: 0.3s; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        #status { display: none; text-align: center; color: var(--accent); margin-bottom: 10px; font-weight: bold; }
+        .dish-item { display: flex; justify-content: space-between; align-items: center; background: #334155; padding: 10px 15px; border-radius: 10px; margin-bottom: 10px; }
+        .qr-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); display:none; flex-direction:column; align-items:center; justify-content:center; z-index:100; }
+        .qr-box { background: white; padding: 20px; border-radius: 20px; text-align: center; color: black; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>🚀 AR Menu Dashboard</h2>
+    <h2>🚀 AR Menu Admin</h2>
 
-    <div class="grid">
-        <div class="card">
-            <h3><span class="step-num">1</span>Добавить блюдо</h3>
-            <label>Название для клиента</label>
-            <input id="name" placeholder="Например: Стейк Рибай 🥩">
-            
-            <label>Имя файла (из папки models)</label>
-            <input id="file" placeholder="steak (без .glb)">
-            
-            <label>Масштаб (обычно 0.5 - 1.5)</label>
-            <input id="scale" type="number" step="0.1" value="1">
-            
-            <button onclick="addDish()">➕ Добавить в систему</button>
-        </div>
-
-        <div class="card">
-            <h3><span class="step-num">2</span>Управление меню</h3>
-            <div id="dishList">
-                </div>
-            
-            <div style="margin-top:20px">
-                <p style="font-size: 12px; opacity: 0.6;">После изменений скопируй этот код в menu.json:</p>
-                <textarea id="jsonOutput" readonly></textarea>
-                <button class="secondary" onclick="copyJSON()">📋 Копировать JSON для GitHub</button>
-            </div>
-        </div>
+    <div class="card">
+        <label>Название блюда</label>
+        <input id="name" placeholder="Например: Стейк Рибай">
+        <label>Цена</label>
+        <input id="price" placeholder="5000 тг">
+        <label>3D Модель (.glb)</label>
+        <input type="file" id="fileInput" accept=".glb">
+        <div id="status">Загрузка... 0%</div>
+        <button id="addBtn" onclick="uploadAndSave()">📦 Опубликовать</button>
     </div>
 
-    <div id="qr-section" class="card" style="margin-top: 20px; display: none;">
-        <h3><span class="step-num">3</span>Готовый QR и ссылка</h3>
-        <div id="qr-result"></div>
-        <button class="secondary" onclick="downloadQR()" style="margin-top: 10px;">💾 Скачать QR-код (.png)</button>
-        <p id="copy-link-text" style="font-size: 12px; word-break: break-all; margin-top: 10px; text-align: center; color: var(--accent);"></p>
+    <div class="card">
+        <h3>📍 Ваше Меню</h3>
+        <div id="list"></div>
+    </div>
+</div>
+
+<div id="qr-modal" class="qr-overlay" onclick="this.style.display='none'">
+    <div class="qr-box" onclick="event.stopPropagation()">
+        <div id="qrcode"></div>
+        <button onclick="downloadQR()" style="margin-top:15px; background: #000; color:#fff;">💾 Скачать QR</button>
     </div>
 </div>
 
 <script>
-let dishes = JSON.parse(localStorage.getItem("dishes") || "{}");
+// ТВОИ КЛЮЧИ FIREBASE
+const firebaseConfig = {
+    apiKey: "AIzaSyBZQlpvIWDLdcjKHTcwmmRCR3BQ8i_jGZI",
+    authDomain: "project-ed6edce8-8a87-4297-ac0.firebaseapp.com",
+    databaseURL: "https://project-ed6edce8-8a87-4297-ac0-default-rtdb.firebaseio.com",
+    projectId: "project-ed6edce8-8a87-4297-ac0",
+    storageBucket: "project-ed6edce8-8a87-4297-ac0.firebasestorage.app",
+    messagingSenderId: "488746138015",
+    appId: "1:488746138015:web:6a55f0531e10e7e07225aa"
+};
 
-function addDish(){
-    const name = document.getElementById("name").value.trim();
-    const file = document.getElementById("file").value.trim();
-    const scale = parseFloat(document.getElementById("scale").value) || 1;
+firebase.initializeApp(firebaseConfig);
+const storage = firebase.storage();
+const db = firebase.database();
 
-    if(!name || !file) return alert("Заполни поля!");
+async function uploadAndSave() {
+    const file = document.getElementById('fileInput').files[0];
+    const name = document.getElementById('name').value;
+    const price = document.getElementById('price').value;
+    const btn = document.getElementById('addBtn');
+    const stat = document.getElementById('status');
 
-    dishes[file] = { name, file, baseScale: scale };
-    localStorage.setItem("dishes", JSON.stringify(dishes));
-    render();
-    document.getElementById("name").value = "";
-    document.getElementById("file").value = "";
+    if (!file || !name) return alert("Заполни имя и выбери файл!");
+
+    btn.disabled = true;
+    stat.style.display = "block";
+
+    const fileRef = storage.ref('models/' + Date.now() + "_" + file.name);
+    const uploadTask = fileRef.put(file);
+
+    uploadTask.on('state_changed', 
+        (s) => { stat.innerText = `Загрузка: ${Math.round((s.bytesTransferred/s.totalBytes)*100)}%`; },
+        (e) => { alert("Ошибка! Проверь правила Storage"); btn.disabled = false; },
+        async () => {
+            const url = await uploadTask.snapshot.ref.getDownloadURL();
+            const newDish = db.ref('menu').push();
+            await newDish.set({ name, price, fileUrl: url, id: newDish.key });
+            btn.disabled = false;
+            stat.style.display = "none";
+            alert("Готово!");
+        }
+    );
 }
 
-function removeDish(id){
-    if(confirm("Удалить?")) {
-        delete dishes[id];
-        localStorage.setItem("dishes", JSON.stringify(dishes));
-        render();
-    }
-}
-
-function render(){
-    const list = document.getElementById("dishList");
+db.ref('menu').on('value', (snap) => {
+    const list = document.getElementById('list');
     list.innerHTML = "";
-    
-    Object.keys(dishes).forEach(id => {
-        const d = dishes[id];
+    snap.forEach((child) => {
+        const d = child.val();
         list.innerHTML += `
             <div class="dish-item">
-                <div class="dish-info">
-                    <strong>${d.name}</strong><br>
-                    <small style="opacity:0.6">${d.file}.glb</small>
+                <span><strong>${d.name}</strong> (${d.price})</span>
+                <div>
+                    <button style="width:auto; padding:5px 10px;" onclick="showQR('${d.id}')">QR</button>
+                    <button style="width:auto; padding:5px 10px; background:#ef4444;" onclick="db.ref('menu/${d.id}').remove()">✕</button>
                 </div>
-                <div class="dish-actions">
-                    <button class="btn-small" onclick="generateQR('${id}')">QR</button>
-                    <button class="btn-small secondary" onclick="removeDish('${id}')">🗑️</button>
-                </div>
-            </div>
-        `;
+            </div>`;
     });
+});
 
-    document.getElementById("jsonOutput").value = JSON.stringify(dishes, null, 2);
-}
-
-function generateQR(id){
-    const qrSection = document.getElementById("qr-section");
-    const qrResult = document.getElementById("qr-result");
-    qrSection.style.display = "block";
-    qrResult.innerHTML = "";
-
+function showQR(id) {
+    document.getElementById('qr-modal').style.display = "flex";
+    const cont = document.getElementById('qrcode');
+    cont.innerHTML = "";
     const url = window.location.href.replace('admin.html', 'index.html') + "?dish=" + id;
-    document.getElementById("copy-link-text").innerText = url;
-
-    QRCode.toCanvas(url, { width: 300, margin: 2 }, (err, canvas) => {
-        if(!err) qrResult.appendChild(canvas);
-    });
-    
-    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-}
-
-function copyJSON() {
-    document.getElementById("jsonOutput").select();
-    document.execCommand("copy");
-    alert("Скопировано! Теперь вставь это в menu.json на GitHub и сохрани.");
+    new QRCode(cont, { text: url, width: 250, height: 250 });
 }
 
 function downloadQR() {
-    const canvas = document.querySelector("#qr-result canvas");
-    const link = document.createElement('a');
-    link.download = 'qr-code.png';
-    link.href = canvas.toDataURL();
-    link.click();
+    const img = document.querySelector("#qrcode img");
+    const a = document.createElement('a');
+    a.download = 'qr.png'; a.href = img.src; a.click();
 }
-
-render();
 </script>
 </body>
 </html>

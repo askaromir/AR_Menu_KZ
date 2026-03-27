@@ -1,80 +1,77 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AR Menu</title>
-<script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
-<style>
-  body { margin:0; background:#0a0a0a; font-family:sans-serif; color:#fff; }
-  model-viewer { width:100vw; height:100vh; background:#000; }
-  #label { position:fixed; top:20px; left:50%; transform:translateX(-50%); background:rgba(255,255,255,0.1); padding:10px 20px; border-radius:20px; backdrop-filter:blur(10px); }
-  #btn { position:fixed; bottom:40px; left:50%; transform:translateX(-50%); padding:15px 30px; border:none; border-radius:30px; background:#fff; color:#000; font-weight:bold; cursor:pointer;}
-  #status { position:fixed; bottom:10px; left:50%; transform:translateX(-50%); font-size:13px; opacity:0.7; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AR Menu</title>
+    <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+    <style>
+        body { margin:0; background:#000; font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica; color:#fff; overflow: hidden; }
+        model-viewer { width:100vw; height:100vh; --progress-bar-color: #38bdf8; }
+        
+        .ui-overlay { position: fixed; z-index: 10; width: 100%; pointer-events: none; }
+        .top-bar { top: 20px; text-align: center; }
+        .bottom-bar { bottom: 40px; display: flex; justify-content: center; }
+        
+        .badge { background: rgba(0,0,0,0.6); backdrop-filter: blur(10px); padding: 12px 24px; border-radius: 30px; border: 1px solid rgba(255,255,255,0.1); display: inline-block; pointer-events: auto; }
+        
+        #btn-ar { background: #fff; color: #000; border: none; padding: 16px 32px; border-radius: 30px; font-weight: bold; font-size: 16px; cursor: pointer; pointer-events: auto; box-shadow: 0 10px 20px rgba(0,0,0,0.3); display: none; }
+        #status { position: fixed; bottom: 15px; width: 100%; text-align: center; font-size: 12px; opacity: 0.5; }
+    </style>
 </head>
 <body>
 
-<div id="label">Загрузка меню...</div>
+<div class="ui-overlay top-bar">
+    <div class="badge" id="label">Загрузка меню...</div>
+</div>
 
-<model-viewer id="model" ar ar-modes="scene-viewer quick-look webxr" camera-controls auto-rotate ar-scale="fixed"></model-viewer>
+<model-viewer id="model" ar ar-modes="scene-viewer quick-look webxr" camera-controls auto-rotate shadow-intensity="1" ar-scale="fixed">
+    <div slot="progress-bar"></div>
+</model-viewer>
 
-<button id="btn" style="display:none;">Открыть AR</button>
-<div id="status">Подключение...</div>
+<div class="ui-overlay bottom-bar">
+    <button id="btn-ar">ПОСМОТРЕТЬ В AR</button>
+</div>
+
+<div id="status">Инициализация...</div>
 
 <script>
 const CONFIG = {
-  MODELS_URL: "https://askaromir.github.io/AR_Menu_KZ/models/",
-  MENU_URL: "menu.json", // Путь к нашей новой базе данных
-  GLOBAL_SCALE: 0.1,
-  MAX_SCALE: 0.3,
-  MIN_SCALE: 0.03
+    MODELS_URL: "https://askaromir.github.io/AR_Menu_KZ/models/",
+    MENU_URL: "menu.json",
+    GLOBAL_SCALE: 0.1
 };
 
-const model = document.getElementById("model");
-const label = document.getElementById("label");
-const btn = document.getElementById("btn");
-const status = document.getElementById("status");
-
-function getScale(base){
-  const s = Math.max(CONFIG.MIN_SCALE, Math.min(CONFIG.MAX_SCALE, base * CONFIG.GLOBAL_SCALE));
-  return `${s} ${s} ${s}`;
-}
-
 async function init() {
-  try {
-    const params = new URLSearchParams(window.location.search);
-    const dishId = params.get("dish") || "burger"; // бургер по умолчанию
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const dishId = params.get("dish");
+        
+        const res = await fetch(CONFIG.MENU_URL + "?v=" + Date.now()); // Чистим кэш
+        const menu = await res.json();
+        
+        const dish = menu[dishId] || Object.values(menu)[0];
+        if(!dish) throw new Error("Меню пустое");
 
-    // Запрашиваем свежие данные
-    const response = await fetch(CONFIG.MENU_URL);
-    if (!response.ok) throw new Error("Ошибка сети");
-    const dishes = await response.json();
+        document.getElementById("label").innerText = dish.name;
+        const model = document.getElementById("model");
+        
+        model.src = CONFIG.MODELS_URL + dish.file + ".glb";
+        model.setAttribute("ios-src", CONFIG.MODELS_URL + dish.file + ".usdz");
+        
+        const s = dish.baseScale * CONFIG.GLOBAL_SCALE;
+        model.scale = `${s} ${s} ${s}`;
 
-    const dish = dishes[dishId];
-    if (!dish) throw new Error("Блюдо не найдено");
-
-    label.textContent = dish.name;
-    model.setAttribute("src", CONFIG.MODELS_URL + dish.file + ".glb");
-    model.setAttribute("ios-src", CONFIG.MODELS_URL + dish.file + ".usdz");
-    model.setAttribute("scale", getScale(dish.baseScale));
-    
-    btn.style.display = "block";
-    status.textContent = "Загрузка 3D модели...";
-
-  } catch (err) {
-    label.textContent = "Ошибка";
-    status.textContent = "❌ " + err.message;
-  }
+        model.addEventListener("load", () => {
+            document.getElementById("btn-ar").style.display = "block";
+            document.getElementById("status").innerText = "Модель готова";
+        });
+    } catch (e) {
+        document.getElementById("status").innerText = "Ошибка: " + e.message;
+    }
 }
 
-model.addEventListener("load", () => status.textContent = "✅ Готово");
-model.addEventListener("error", () => status.textContent = "❌ Ошибка загрузки модели");
-
-btn.addEventListener("click", async () => {
-  if (model.canActivateAR) await model.activateAR();
-  else status.textContent = "AR не поддерживается на этом устройстве";
-});
+document.getElementById("btn-ar").onclick = () => document.getElementById("model").activateAR();
 
 init();
 </script>

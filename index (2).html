@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AR Меню</title>
+  <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0a0a; width: 100vw; height: 100vh; overflow: hidden; font-family: sans-serif; }
+
+    model-viewer {
+      width: 100vw;
+      height: 100vh;
+      background-color: #0a0a0a;
+      --poster-color: #0a0a0a;
+    }
+
+    /* Скрываем стандартную AR кнопку — делаем свою */
+    model-viewer::part(ar-button) { display: none; }
+
+    #dish-label {
+      position: fixed;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      font-size: 18px;
+      font-weight: 600;
+      padding: 8px 22px;
+      border-radius: 30px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.15);
+      white-space: nowrap;
+      pointer-events: none;
+      z-index: 20;
+    }
+
+    #ar-overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      padding-bottom: 48px;
+      pointer-events: none;
+      z-index: 20;
+    }
+
+    #ar-btn {
+      pointer-events: all;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #fff;
+      color: #000;
+      border: none;
+      border-radius: 50px;
+      padding: 16px 36px;
+      font-size: 18px;
+      font-weight: 700;
+      cursor: pointer;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%   { box-shadow: 0 0 0 0 rgba(255,255,255,0.5); }
+      70%  { box-shadow: 0 0 0 18px rgba(255,255,255,0); }
+      100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); }
+    }
+
+    #ar-btn svg { width: 24px; height: 24px; flex-shrink: 0; }
+
+    #ar-hint {
+      margin-top: 12px;
+      color: rgba(255,255,255,0.45);
+      font-size: 13px;
+      pointer-events: none;
+    }
+
+    #no-ar-msg {
+      display: none;
+      position: fixed;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255,80,80,0.15);
+      border: 1px solid rgba(255,80,80,0.3);
+      color: #ff8080;
+      padding: 12px 24px;
+      border-radius: 12px;
+      font-size: 14px;
+      text-align: center;
+      z-index: 30;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="dish-label">Загрузка...</div>
+
+  <model-viewer
+    id="model"
+    ar
+    ar-modes="webxr scene-viewer quick-look"
+    camera-controls
+    auto-rotate
+    auto-rotate-delay="300"
+    rotation-per-second="25deg"
+    shadow-intensity="1"
+    ar-scale="fixed">
+  </model-viewer>
+
+  <div id="ar-overlay">
+    <button id="ar-btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="24" height="24">
+        <path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/>
+        <path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M12 9v-2"/><path d="M15 10.5l1.5-1"/><path d="M15 13.5l1.5 1"/>
+        <path d="M12 15v2"/><path d="M9 13.5l-1.5 1"/><path d="M9 10.5l-1.5-1"/>
+      </svg>
+      Смотреть в AR
+    </button>
+    <div id="ar-hint">Наведи камеру на стол или пол</div>
+  </div>
+
+  <div id="no-ar-msg">📵 AR недоступен.<br>Открой в Safari (iPhone) или Chrome (Android).</div>
+
+  <script>
+    // ============================================================
+    //  НАСТРОЙКИ — меняй только здесь
+    // ============================================================
+
+    const BASE_URL = "https://askaromir.github.io/AR_Menu_KZ/models/";
+
+    //  scale — размер в AR. 1.0 = оригинал, 0.1 = 10%.
+    //  Если бургер гигантский → уменьши scale, например "0.05 0.05 0.05"
+    const DISHES = {
+      burger: { name: "🍔 Бургер",  file: "burger",  scale: "0.15 0.15 0.15" },
+      pizza:  { name: "🍕 Пицца",   file: "pizza",   scale: "0.2 0.2 0.2"   },
+      sushi:  { name: "🍣 Суши",    file: "sushi",   scale: "0.12 0.12 0.12" },
+      coffee: { name: "☕ Кофе",    file: "coffee",  scale: "0.1 0.1 0.1"   },
+      cake:   { name: "🎂 Торт",    file: "cake",    scale: "0.18 0.18 0.18" },
+    };
+
+    // ============================================================
+
+    const params  = new URLSearchParams(window.location.search);
+    const dishId  = params.get("dish") || "burger";
+    const dish    = DISHES[dishId];
+    const model   = document.getElementById("model");
+    const label   = document.getElementById("dish-label");
+    const arBtn   = document.getElementById("ar-btn");
+    const noArMsg = document.getElementById("no-ar-msg");
+
+    if (dish) {
+      label.textContent = dish.name;
+      model.setAttribute("src",     `${BASE_URL}${dish.file}.glb`);
+      model.setAttribute("ios-src", `${BASE_URL}${dish.file}.usdz`);
+      model.setAttribute("scale",   dish.scale);
+    } else {
+      label.textContent = "Блюдо не найдено";
+    }
+
+    // Большая кнопка → запускаем AR напрямую
+    arBtn.addEventListener("click", () => {
+      if (model.canActivateAR) {
+        model.activateAR();
+      } else {
+        arBtn.style.display = "none";
+        noArMsg.style.display = "block";
+      }
+    });
+
+    model.addEventListener("load", () => {
+      if (!model.canActivateAR) {
+        document.getElementById("ar-hint").textContent = "AR недоступен в этом браузере";
+      }
+    });
+  </script>
+
+</body>
+</html>

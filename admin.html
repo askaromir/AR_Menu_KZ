@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AR Menu Admin</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+<style>
+  body { font-family:sans-serif; padding:20px; max-width: 600px; margin: 0 auto; }
+  input, select, textarea { width:100%; padding:10px; margin:6px 0; box-sizing: border-box; }
+  button { width:100%; padding:12px; margin-top:10px; background: #000; color: #fff; border: none; cursor: pointer;}
+  button:hover { background: #333; }
+  .box { border: 1px solid #ccc; padding: 15px; margin-top: 20px; border-radius: 8px;}
+  #qr { margin-top:20px; text-align:center; }
+  textarea { height: 150px; font-family: monospace; resize: vertical; }
+</style>
+</head>
+<body>
+<div style="background: #f0f0f0; padding: 10px; margin-bottom: 20px; border-radius: 5px; display: flex; gap: 15px; font-size: 14px;">
+  <strong>Панель быстрого доступа:</strong>
+  <a href="index.html" target="_blank">👁 Предпросмотр (Index)</a>
+  <a href="https://github.com/твоё-имя/AR_Menu_KZ/edit/main/menu.json" target="_blank">✏️ Редактировать меню на GitHub</a>
+  <a href="https://github.com/твоё-имя/AR_Menu_KZ/tree/main/models" target="_blank">📂 Папка с 3D моделями</a>
+</div>
+
+<h2>🍔 Генератор AR Menu</h2>
+
+<div class="box">
+  <h3>1. Добавить блюдо</h3>
+  <input id="name" placeholder="Название (например: 🍔 Бургер)">
+  <input id="file" placeholder="Имя файла модели (без .glb)">
+  <input id="scale" type="number" step="0.1" value="1" placeholder="Масштаб (1)">
+  <button onclick="addDish()">Добавить в меню</button>
+</div>
+
+<div class="box">
+  <h3>2. Скопируй это в menu.json на GitHub</h3>
+  <textarea id="jsonOutput" readonly></textarea>
+  <button onclick="copyJSON()">Скопировать JSON</button>
+</div>
+
+<div class="box">
+  <h3>3. Сгенерировать QR-код</h3>
+  <select id="list"></select>
+  <button onclick="generateQR()">Сгенерировать QR</button>
+  <div id="qr"></div>
+</div>
+
+<script>
+// Загружаем сохраненное из памяти браузера
+let dishes = JSON.parse(localStorage.getItem("dishes") || "{}");
+
+function addDish(){
+  const name = document.getElementById("name").value.trim();
+  const file = document.getElementById("file").value.trim();
+  const scale = parseFloat(document.getElementById("scale").value) || 1;
+
+  if(!name || !file) return alert("Заполни название и имя файла");
+
+  dishes[file] = { name, file, baseScale: scale };
+  localStorage.setItem("dishes", JSON.stringify(dishes));
+  updateUI();
+  
+  // Очищаем форму
+  document.getElementById("name").value = '';
+  document.getElementById("file").value = '';
+}
+
+function updateUI(){
+  // Обновляем выпадающий список
+  const list = document.getElementById("list");
+  list.innerHTML = "";
+  Object.keys(dishes).forEach(k => {
+    const o = document.createElement("option");
+    o.value = k;
+    o.textContent = dishes[k].name;
+    list.appendChild(o);
+  });
+
+  // Обновляем текстовое поле с JSON
+  document.getElementById("jsonOutput").value = JSON.stringify(dishes, null, 2);
+}
+
+function copyJSON() {
+  const textarea = document.getElementById("jsonOutput");
+  textarea.select();
+  document.execCommand("copy");
+  alert("Скопировано! Теперь вставь это в файл menu.json на GitHub.");
+}
+
+function generateQR(){
+  const id = document.getElementById("list").value;
+  if(!id) return alert("Добавьте хотя бы одно блюдо");
+
+  // ВНИМАНИЕ: Замени origin на свой реальный домен, если QR-коды не работают!
+  const baseUrl = window.location.href.replace('admin.html', 'index.html');
+  const finalUrl = baseUrl + "?dish=" + id;
+
+  document.getElementById("qr").innerHTML = `<p>Ссылка: <a href="${finalUrl}" target="_blank">${finalUrl}</a></p>`;
+
+  QRCode.toCanvas(finalUrl, { width: 250, margin: 2 }, (err, canvas) => {
+    if(!err) document.getElementById("qr").appendChild(canvas);
+  });
+}
+
+// Инициализация при загрузке
+updateUI();
+</script>
+
+</body>
+</html>

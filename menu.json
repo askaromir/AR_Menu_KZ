@@ -1,0 +1,12 @@
+{
+  "burger": {
+    "name": "🍔 Бургер",
+    "file": "burger",
+    "baseScale": 1
+  },
+  "pizza": {
+    "name": "🍕 Пицца",
+    "file": "pizza",
+    "baseScale": 1.2
+  }
+}

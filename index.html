@@ -1,39 +1,333 @@
-<script>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AR Menu</title>
 
-const db = firebase.database();
+  <!-- model-viewer с jsDelivr — надёжнее чем unpkg -->
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer@3.3.0/dist/model-viewer.min.js"></script>
 
-const params = new URLSearchParams(window.location.search);
-const dishId = params.get("dish");
+  <!-- Firebase (modular SDK — лёгче compat) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 
-const info = document.getElementById("info");
-const model = document.getElementById("model");
-const btn = document.getElementById("btn-ar");
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
-if (!dishId) {
-  info.textContent = "❌ Нет блюда";
-} else {
-  db.ref("menu/" + dishId).once("value", snap => {
-    const d = snap.val();
-
-    if (!d) {
-      info.textContent = "❌ Блюдо не найдено";
-      return;
+    body {
+      background: #050505;
+      font-family: 'SF Pro Display', -apple-system, 'Helvetica Neue', sans-serif;
+      color: #fff;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
     }
 
-    info.textContent = d.name + " - " + d.price;
+    model-viewer {
+      width: 100vw;
+      height: 100vh;
+      --poster-color: #050505;
+    }
 
-    model.src = d.fileUrl;
+    /* Прячем дефолтную кнопку AR */
+    model-viewer::part(ar-button) { display: none; }
 
-    model.addEventListener("load", () => {
-      btn.style.display = "block";
+    /* ── Шапка ── */
+    #header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      padding: 20px 24px 16px;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, transparent 100%);
+      z-index: 30;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    #dish-name {
+      font-size: clamp(22px, 5vw, 32px);
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      line-height: 1.15;
+      max-width: 240px;
+    }
+
+    #dish-price {
+      font-size: 15px;
+      color: rgba(255,255,255,0.55);
+      margin-top: 4px;
+      font-weight: 400;
+    }
+
+    #dish-badge {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 13px;
+      color: rgba(255,255,255,0.6);
+      white-space: nowrap;
+      margin-top: 4px;
+      flex-shrink: 0;
+    }
+
+    /* ── Прогресс загрузки ── */
+    #progress-wrap {
+      position: fixed;
+      bottom: 130px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 160px;
+      z-index: 30;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #progress-bar {
+      width: 100%;
+      height: 2px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    #progress-fill {
+      height: 100%;
+      background: #fff;
+      border-radius: 2px;
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    #progress-text {
+      font-size: 12px;
+      color: rgba(255,255,255,0.4);
+    }
+
+    /* ── AR кнопка ── */
+    #ar-btn {
+      position: fixed;
+      bottom: 44px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: none;
+      align-items: center;
+      gap: 10px;
+      background: #fff;
+      color: #000;
+      border: none;
+      border-radius: 50px;
+      padding: 17px 36px;
+      font-size: 17px;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: -0.2px;
+      white-space: nowrap;
+      z-index: 40;
+      animation: pop-in 0.4s cubic-bezier(0.34,1.56,0.64,1) both;
+    }
+
+    @keyframes pop-in {
+      from { transform: translateX(-50%) scale(0.8); opacity: 0; }
+      to   { transform: translateX(-50%) scale(1);   opacity: 1; }
+    }
+
+    /* Пульс вокруг кнопки */
+    #ar-btn::before {
+      content: '';
+      position: absolute;
+      inset: -4px;
+      border-radius: 54px;
+      background: rgba(255,255,255,0.25);
+      animation: pulse-ring 2.2s ease-out infinite;
+    }
+
+    @keyframes pulse-ring {
+      0%   { transform: scale(0.95); opacity: 0.7; }
+      70%  { transform: scale(1.06); opacity: 0; }
+      100% { opacity: 0; }
+    }
+
+    #ar-btn svg { width: 20px; height: 20px; flex-shrink: 0; }
+
+    #ar-hint {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 12px;
+      color: rgba(255,255,255,0.3);
+      white-space: nowrap;
+      z-index: 30;
+      display: none;
+    }
+
+    /* ── Ошибка ── */
+    #error-screen {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #050505;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      z-index: 50;
+    }
+
+    #error-screen .icon { font-size: 48px; }
+    #error-screen p { font-size: 16px; color: rgba(255,255,255,0.5); text-align: center; padding: 0 40px; }
+
+    /* ── No AR сообщение ── */
+    #no-ar {
+      display: none;
+      position: fixed;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255,60,60,0.12);
+      border: 1px solid rgba(255,60,60,0.25);
+      color: #ff9090;
+      padding: 12px 20px;
+      border-radius: 12px;
+      font-size: 13px;
+      text-align: center;
+      z-index: 40;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Шапка -->
+  <div id="header">
+    <div>
+      <div id="dish-name">Загрузка...</div>
+      <div id="dish-price"></div>
+    </div>
+    <div id="dish-badge">3D AR</div>
+  </div>
+
+  <!-- 3D вьювер -->
+  <model-viewer
+    id="model"
+    ar
+    ar-modes="scene-viewer quick-look webxr"
+    camera-controls
+    auto-rotate
+    auto-rotate-delay="500"
+    rotation-per-second="20deg"
+    shadow-intensity="0.8"
+    exposure="1">
+  </model-viewer>
+
+  <!-- Прогресс загрузки -->
+  <div id="progress-wrap">
+    <div id="progress-bar"><div id="progress-fill"></div></div>
+    <span id="progress-text">Загрузка модели...</span>
+  </div>
+
+  <!-- AR кнопка -->
+  <button id="ar-btn">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/>
+      <path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+      <path d="M12 8l-4 2.5v5L12 18l4-2.5v-5L12 8z"/>
+    </svg>
+    Смотреть в AR
+  </button>
+  <div id="ar-hint">Наведи на стол или пол</div>
+
+  <!-- Ошибки -->
+  <div id="error-screen">
+    <div class="icon">🍽️</div>
+    <p>Блюдо не найдено или не загружено</p>
+  </div>
+
+  <div id="no-ar">📵 AR не поддерживается в этом браузере</div>
+
+  <script>
+    // ─── КОНФИГ FIREBASE — замени своими данными ───────────────
+    const FIREBASE_CONFIG = {
+      apiKey:            "AIzaSyBZQlpvIWDLdcjKHTcwmmRCR3BQ8i_jGZI",
+      authDomain:        "project-ed6edce8-8a87-4297-ac0.firebaseapp.com",
+      databaseURL:       "https://project-ed6edce8-8a87-4297-ac0-default-rtdb.firebaseio.com",
+      projectId:         "project-ed6edce8-8a87-4297-ac0",
+      storageBucket:     "project-ed6edce8-8a87-4297-ac0.firebasestorage.app",
+      messagingSenderId: "488746138015",
+      appId:             "1:488746138015:web:6a55f0531e10e7e07225aa"
+    };
+    // ────────────────────────────────────────────────────────────
+
+    firebase.initializeApp(FIREBASE_CONFIG);
+    const db = firebase.database();
+
+    const $ = id => document.getElementById(id);
+    const model     = $('model');
+    const arBtn     = $('ar-btn');
+    const arHint    = $('ar-hint');
+    const noAr      = $('no-ar');
+    const progFill  = $('progress-fill');
+    const progText  = $('progress-text');
+    const progWrap  = $('progress-wrap');
+    const errScreen = $('error-screen');
+
+    const dishId = new URLSearchParams(window.location.search).get('dish');
+
+    function showError() {
+      progWrap.style.display = 'none';
+      errScreen.style.display = 'flex';
+    }
+
+    if (!dishId) {
+      showError();
+    } else {
+      db.ref('menu/' + dishId).once('value', snap => {
+        const d = snap.val();
+        if (!d) { showError(); return; }
+
+        // Заполняем шапку
+        $('dish-name').textContent  = d.name;
+        $('dish-price').textContent = d.price ? d.price + ' ₸' : '';
+
+        // Грузим модель
+        model.setAttribute('src', d.fileUrl);
+
+        // Масштаб — если задан в Firebase, применяем
+        if (d.scale) model.setAttribute('scale', d.scale);
+      });
+    }
+
+    // Прогресс загрузки GLB
+    model.addEventListener('progress', e => {
+      const pct = Math.round(e.detail.totalProgress * 100);
+      progFill.style.width = pct + '%';
+      progText.textContent = pct < 100 ? `Загрузка ${pct}%` : 'Почти готово...';
     });
 
-    model.addEventListener("error", () => {
-      info.textContent = "❌ Ошибка модели";
+    // Модель загружена
+    model.addEventListener('load', () => {
+      progWrap.style.display = 'none';
+      arBtn.style.display = 'flex';
+      arHint.style.display = 'block';
     });
-  });
-}
 
-btn.onclick = () => model.activateAR();
+    // Ошибка загрузки модели
+    model.addEventListener('error', showError);
 
-</script>
+    // Нажатие AR
+    arBtn.addEventListener('click', () => {
+      if (model.canActivateAR) {
+        model.activateAR();
+      } else {
+        arBtn.style.display = 'none';
+        noAr.style.display = 'block';
+      }
+    });
+  </script>
+</body>
+</html>

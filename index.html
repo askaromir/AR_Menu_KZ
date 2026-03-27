@@ -1,55 +1,39 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>AR Menu</title>
-    <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
-    <style>
-        body { margin:0; background:#000; font-family: sans-serif; color:#fff; overflow: hidden; }
-        model-viewer { width:100vw; height:100vh; }
-        .ui { position: fixed; top: 30px; width: 100%; text-align: center; z-index: 10; pointer-events: none; }
-        .badge { background: rgba(0,0,0,0.7); padding: 15px 30px; border-radius: 40px; display: inline-block; border: 1px solid rgba(255,255,255,0.1); }
-        #btn-ar { position: fixed; bottom: 50px; left: 50%; transform: translateX(-50%); background: #fff; color: #000; border: none; padding: 20px 40px; border-radius: 50px; font-weight: bold; font-size: 18px; display: none; pointer-events: auto; }
-    </style>
-</head>
-<body>
-
-<div class="ui"><div class="badge" id="info">Загрузка...</div></div>
-<model-viewer id="model" ar ar-modes="scene-viewer quick-look webxr" camera-controls auto-rotate ar-scale="fixed"></model-viewer>
-<button id="btn-ar">ПОСМОТРЕТЬ В AR</button>
-
 <script>
-const firebaseConfig = {
-    apiKey: "AIzaSyBZQlpvIWDLdcjKHTcwmmRCR3BQ8i_jGZI",
-    authDomain: "project-ed6edce8-8a87-4297-ac0.firebaseapp.com",
-    databaseURL: "https://project-ed6edce8-8a87-4297-ac0-default-rtdb.firebaseio.com",
-    projectId: "project-ed6edce8-8a87-4297-ac0",
-    storageBucket: "project-ed6edce8-8a87-4297-ac0.firebasestorage.app",
-    messagingSenderId: "488746138015",
-    appId: "1:488746138015:web:6a55f0531e10e7e07225aa"
-};
 
-firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
 const params = new URLSearchParams(window.location.search);
 const dishId = params.get("dish");
 
-if (dishId) {
-    db.ref('menu/' + dishId).once('value', (snap) => {
-        const d = snap.val();
-        if (d) {
-            document.getElementById('info').innerHTML = `<strong>${d.name}</strong><br>${d.price}`;
-            const mv = document.getElementById('model');
-            mv.src = d.fileUrl;
-            mv.addEventListener('load', () => document.getElementById('btn-ar').style.display = "block");
-        }
+const info = document.getElementById("info");
+const model = document.getElementById("model");
+const btn = document.getElementById("btn-ar");
+
+if (!dishId) {
+  info.textContent = "❌ Нет блюда";
+} else {
+  db.ref("menu/" + dishId).once("value", snap => {
+    const d = snap.val();
+
+    if (!d) {
+      info.textContent = "❌ Блюдо не найдено";
+      return;
+    }
+
+    info.textContent = d.name + " - " + d.price;
+
+    model.src = d.fileUrl;
+
+    model.addEventListener("load", () => {
+      btn.style.display = "block";
     });
+
+    model.addEventListener("error", () => {
+      info.textContent = "❌ Ошибка модели";
+    });
+  });
 }
-document.getElementById('btn-ar').onclick = () => document.getElementById('model').activateAR();
+
+btn.onclick = () => model.activateAR();
+
 </script>
-</body>
-</html>

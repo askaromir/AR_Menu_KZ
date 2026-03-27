@@ -123,9 +123,16 @@ function showQR(id) {
 }
 
 function downloadQR() {
-    const img = document.querySelector("#qrcode img");
-    const a = document.createElement('a');
-    a.download = 'qr.png'; a.href = img.src; a.click();
+    const canvas = document.querySelector("#qrcode canvas");
+    if (!canvas) {
+        alert("Сначала нажми кнопку QR у блюда!");
+        return;
+    }
+    const dataUrl = canvas.toDataURL("image/png");
+    const link = document.createElement('a');
+    link.download = 'ar-menu-qr.png';
+    link.href = dataUrl;
+    link.click();
 }
 </script>
 </body>
